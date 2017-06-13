@@ -163,7 +163,7 @@ A replica maintains several logical copies of the service state:
 proof of correctness for a checkpoint, is generated as follows:
 >
 1. when a replica i produces a checkpoint, it multicasts a message (CHECKPOINT, n, d, i) to the other replicas, 
->> n is the sequence number of the last request whose execution is reflected in the state, 
+>> n is the sequence number of the last request whose execution is reflected in the state, <br>
 >> d is the digest of the state.
 2. each replica collects checkpoint messages in its log until it has 2f+1 of them for sequence number n with the same digest d signed by different replicas.   These 2f+1 messages are the proof of correctness for the checkpoint.
 
@@ -182,15 +182,15 @@ View changes are triggered by timeouts that prevent backups from waiting indefin
 1. backup starts a view change to move the system to view v+1
 2. it stops accepting messages (other than checkpoint, view-change, and new-view message)
 3. multicast a (VIEW-CHANGE, v+1, n, C, P, i)
->> n: the sequence number of the last stable checkpoint s known to i
->> C: a set of 2f+1 valid checkpoint message proving the correctness of checkpoint s
->> P: a set of Pm for each request m that prepared at i with a sequence number higher than n
+>> n: the sequence number of the last stable checkpoint s known to i <br>
+>> C: a set of 2f+1 valid checkpoint message proving the correctness of checkpoint s <br>
+>> P: a set of Pm for each request m that prepared at i with a sequence number higher than n <br>
 >> each Pm contains a valid pre-prepare message and 2f matching
 4. primary p of view v+1 recieves 2f valid view-change messages for view v+1 from other replicas.
 5. primary multicasts (NEW-VIEW, v+1, V, O) message to all other replica
->> The primary determines the sequence number min-s of the last stable checkpoint in V and the highest sequence number max-s in a prepare message in V
->> primary creates a new pre-prepare message for view v+1 for each sequence number n between min-s and max-s.
->> V: a set of containing the valid view-change message received by the primary plus the view-change message for v+1 the primary sent
+>> The primary determines the sequence number min-s of the last stable checkpoint in V and the highest sequence number max-s in a prepare message in V <br>
+>> primary creates a new pre-prepare message for view v+1 for each sequence number n between min-s and max-s. <br>
+>> V: a set of containing the valid view-change message received by the primary plus the view-change message for v+1 the primary sent <br>
 >> O: a set of pre-prepared messages, from min-s to max-s
 6. primary appends the message in O to its log.
 >> If min-s is greater than the sequence number of its latest stable checkpoint, the primary also inserts the proof of stability for the checkpoint with sequence number min-s in its log.
