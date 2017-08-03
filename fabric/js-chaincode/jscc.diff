@@ -1,0 +1,1245 @@
+diff --git a/core/chaincode/chaincode_support.go b/core/chaincode/chaincode_support.go
+index 1a33028..8866339 100644
+--- a/core/chaincode/chaincode_support.go
++++ b/core/chaincode/chaincode_support.go
+@@ -378,7 +378,7 @@ func (chaincodeSupport *ChaincodeSupport) getArgsAndEnv(cccid *ccprovider.CCCont
+ 		envs = append(envs, "CORE_CHAINCODE_LOGGING_FORMAT="+chaincodeSupport.logFormat)
+ 	}
+ 	switch cLang {
+-	case pb.ChaincodeSpec_GOLANG, pb.ChaincodeSpec_CAR:
++	case pb.ChaincodeSpec_GOLANG, pb.ChaincodeSpec_CAR, pb.ChaincodeSpec_JAVASCRIPT:
+ 		args = []string{"chaincode", fmt.Sprintf("-peer.address=%s", chaincodeSupport.peerAddress)}
+ 	case pb.ChaincodeSpec_JAVA:
+ 		args = []string{"java", "-jar", "chaincode.jar", "--peerAddress", chaincodeSupport.peerAddress}
+@@ -627,6 +627,8 @@ func (chaincodeSupport *ChaincodeSupport) Launch(context context.Context, cccid
+ func (chaincodeSupport *ChaincodeSupport) getVMType(cds *pb.ChaincodeDeploymentSpec) (string, error) {
+ 	if cds.ExecEnv == pb.ChaincodeDeploymentSpec_SYSTEM {
+ 		return container.SYSTEM, nil
++	} else if cds.ExecEnv == pb.ChaincodeDeploymentSpec_INTERPRETER {
++		return container.INTERPRETER, nil
+ 	}
+ 	return container.DOCKER, nil
+ }
+diff --git a/core/chaincode/platforms/javascript/jscc/javascriptcc.go b/core/chaincode/platforms/javascript/jscc/javascriptcc.go
+new file mode 100644
+index 0000000..e3fd7af
+--- /dev/null
++++ b/core/chaincode/platforms/javascript/jscc/javascriptcc.go
+@@ -0,0 +1,490 @@
++/*
++Licensed to the Apache Software Foundation (ASF) under one
++or more contributor license agreements.  See the NOTICE file
++distributed with this work for additional information
++regarding copyright ownership.  The ASF licenses this file
++to you under the Apache License, Version 2.0 (the
++"License"); you may not use this file except in compliance
++with the License.  You may obtain a copy of the License at
++
++  http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing,
++software distributed under the License is distributed on an
++"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++KIND, either express or implied.  See the License for the
++specific language governing permissions and limitations
++under the License.
++*/
++
++package jscc
++
++import (
++	"github.com/hyperledger/fabric/core/chaincode/shim"
++	pb "github.com/hyperledger/fabric/protos/peer"
++	"github.com/op/go-logging"
++
++	"fmt"
++	"io/ioutil"
++	"path/filepath"
++	"strings"
++
++	"encoding/json"
++	"errors"
++
++	"strconv"
++
++	"github.com/robertkrimen/otto"
++)
++
++var logger = logging.MustGetLogger("javascriptcc")
++
++type jCCShim struct {
++	gostub  shim.ChaincodeStubInterface
++	lastErr error
++}
++
++func (stub *jCCShim) GetState(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetState, arg#", len(call.ArgumentList))
++	res, err := stub.gostub.GetState(call.Argument(0).String())
++	if err != nil {
++		stub.lastErr = err
++		return otto.NullValue()
++	}
++
++	var value string
++	json.Unmarshal(res, &value)
++	logger.Warning("GetState", call.Argument(0).String(), value)
++	return ottoStringValue(value)
++}
++
++func (stub *jCCShim) PutState(call otto.FunctionCall) otto.Value {
++	logger.Warning("PutState, arg#", len(call.ArgumentList))
++	if len(call.ArgumentList) < 2 {
++		stub.lastErr = errors.New("Invalid arg number for PutState")
++		return otto.NullValue()
++	}
++
++	logger.Warning("PutState", call.Argument(0).String(), call.Argument(1).String())
++	bytes, _ := json.Marshal(call.Argument(1).String())
++	if err := stub.gostub.PutState(call.Argument(0).String(), bytes); err != nil {
++		stub.lastErr = err
++	}
++
++	return otto.NullValue()
++}
++
++func (stub *jCCShim) DelState(call otto.FunctionCall) otto.Value {
++	logger.Warning("DelState, arg#", len(call.ArgumentList))
++	if err := stub.gostub.DelState(call.Argument(0).String()); err != nil {
++		stub.lastErr = err
++	}
++	return otto.NullValue()
++}
++
++func (stub *jCCShim) GetStateByRange(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetStateByRange, arg#", len(call.ArgumentList))
++	iter, err := stub.gostub.GetStateByRange(call.Argument(0).String(), call.Argument(1).String())
++	if err != nil {
++		stub.lastErr = err
++		return otto.NullValue()
++	}
++
++	v, err := call.Otto.ToValue(&jCCQueryIterator{iter, "", "", nil})
++	if err != nil {
++		stub.lastErr = err
++		logger.Warning(err.Error())
++	}
++	return v
++}
++
++func (stub *jCCShim) GetFunction(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetFunction, arg#", len(call.ArgumentList))
++	funcname, _ := stub.gostub.GetFunctionAndParameters()
++	return ottoStringValue(funcname)
++}
++
++func (stub *jCCShim) GetArguments(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetArgs, arg#", len(call.ArgumentList))
++	_, args := stub.gostub.GetFunctionAndParameters()
++	logger.Warning("GetArguments", strconv.Itoa(len(args)))
++	ret, err := ottoJsonValue(args)
++	if err != nil {
++		logger.Warning(err.Error())
++		stub.lastErr = err
++	}
++	return ret
++}
++
++func (stub *jCCShim) GetLastError(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetError, arg#", len(call.ArgumentList))
++	if stub.lastErr == nil {
++		return otto.NullValue()
++	}
++	return ottoStringValue(stub.lastErr.Error())
++}
++
++func (stub *jCCShim) Success(call otto.FunctionCall) otto.Value {
++	logger.Warning("Success, arg#", len(call.ArgumentList))
++	var response string
++	for _, arg := range call.ArgumentList {
++		response += arg.String()
++	}
++	v, _ := call.Otto.ToValue(shim.Success([]byte(response)))
++	return v
++}
++
++func (stub *jCCShim) Error(call otto.FunctionCall) otto.Value {
++	logger.Warning("Error, arg#", len(call.ArgumentList))
++	var errResponse string
++	for _, arg := range call.ArgumentList {
++		errResponse += arg.String()
++	}
++	v, _ := call.Otto.ToValue(shim.Error(errResponse))
++	return v
++}
++
++func ottoStringValue(s string) otto.Value {
++	v, err := otto.ToValue(s)
++	if err != nil {
++		logger.Warning("ottoStringValue", err.Error())
++	}
++	return v
++}
++
++func ottoJsonValue(x interface{}) (otto.Value, error) {
++	bytes, err := json.Marshal(x)
++	if err != nil {
++		logger.Warning("ottoJSONValue", err.Error())
++		return otto.NaNValue(), err
++	}
++	return ottoStringValue(string(bytes)), nil
++}
++
++type jCCQueryIterator struct {
++	iter         shim.StateQueryIteratorInterface
++	currentKey   string
++	currentValue string
++	lastErr      error
++}
++
++func (jccIte *jCCQueryIterator) HasNext() otto.Value {
++	logger.Warning("HasNext")
++	if jccIte.iter.HasNext() {
++		return otto.TrueValue()
++	}
++	return otto.FalseValue()
++}
++
++func (jccIte *jCCQueryIterator) Next() otto.Value {
++	logger.Warning("iter Next")
++	kv, err := jccIte.iter.Next()
++	if err != nil {
++		jccIte.lastErr = err
++		logger.Warning("iter Next", err.Error())
++		return otto.FalseValue()
++	}
++
++	jccIte.currentKey = kv.GetKey()
++	var val string
++	json.Unmarshal(kv.GetValue(), val)
++	jccIte.currentValue = val
++	jccIte.lastErr = nil
++	logger.Warning("iter Next", kv.GetKey(), val)
++
++	return otto.TrueValue()
++}
++
++func (jccIte *jCCQueryIterator) Close() otto.Value {
++	logger.Warning("Close")
++	if err := jccIte.iter.Close(); err != nil {
++		return ottoStringValue(err.Error())
++	}
++	jccIte.currentKey = ""
++	jccIte.currentValue = ""
++	jccIte.lastErr = nil
++	return otto.NullValue()
++}
++
++func (jccIte *jCCQueryIterator) GetCurrentKey() otto.Value {
++	logger.Warning("GetCurrentKey")
++	return ottoStringValue(jccIte.currentKey)
++}
++
++func (jccIte *jCCQueryIterator) GetCurrentValue() otto.Value {
++	logger.Warning("GetCurrentValue")
++	return ottoStringValue(jccIte.currentValue)
++}
++
++func (jccIte *jCCQueryIterator) GetError() otto.Value {
++	logger.Warning("GetError")
++	return ottoStringValue(jccIte.lastErr.Error())
++}
++
++type JavascriptCC struct {
++	codepath string
++	vm       *otto.Otto
++}
++
++func getShimStub(call otto.FunctionCall) (*jCCShim, error) {
++	x, _ := call.This.Export()
++	switch v := x.(type) {
++	case *jCCShim:
++		return v, nil
++	}
++	return nil, errors.New("Invalid shim type")
++}
++
++func toShimResponse(v otto.Value) pb.Response {
++	if !v.IsDefined() {
++		return shim.Success(nil)
++	}
++
++	x, _ := v.Export()
++	switch resp := x.(type) {
++	case pb.Response:
++		return resp
++	}
++	return shim.Error("Invalid format of response from chaincode: " + v.String())
++}
++
++func builtinShim_Success(call otto.FunctionCall) otto.Value {
++	logger.Warning("Success, arg#", len(call.ArgumentList))
++	var response string
++	for _, arg := range call.ArgumentList {
++		response += arg.String()
++	}
++	v, _ := call.Otto.ToValue(shim.Success([]byte(response)))
++	return v
++}
++
++func builtinShim_Error(call otto.FunctionCall) otto.Value {
++	logger.Warning("Error, arg#", len(call.ArgumentList))
++	var errResponse string
++	for _, arg := range call.ArgumentList {
++		errResponse += arg.String()
++	}
++	v, _ := call.Otto.ToValue(shim.Error(errResponse))
++	return v
++}
++
++func builtinShim_GetLastError(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetError, arg#", len(call.ArgumentList))
++	x, _ := call.This.Export()
++	switch v := x.(type) {
++	case *jCCShim:
++		if v.lastErr == nil {
++			return otto.NullValue()
++		}
++		return ottoStringValue(v.lastErr.Error())
++	}
++
++	return otto.NaNValue()
++}
++
++func builtinShim_GetFunction(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetFunction, arg#", len(call.ArgumentList))
++	stub, err := getShimStub(call)
++	if err != nil {
++		return otto.NaNValue()
++	}
++	funcname, _ := stub.gostub.GetFunctionAndParameters()
++	return ottoStringValue(funcname)
++}
++
++func builtinShim_GetArguments(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetArgs, arg#", len(call.ArgumentList))
++	stub, err := getShimStub(call)
++	if err != nil {
++		return otto.NaNValue()
++	}
++	_, args := stub.gostub.GetFunctionAndParameters()
++	logger.Warning("GetArguments", strconv.Itoa(len(args)))
++	ret, err := ottoJsonValue(args)
++	if err != nil {
++		logger.Warning(err.Error())
++		stub.lastErr = err
++	}
++	return ret
++}
++
++func builtinShim_GetState(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetState, arg#", len(call.ArgumentList))
++	stub, err := getShimStub(call)
++	if err != nil {
++		return otto.NaNValue()
++	}
++	res, err := stub.gostub.GetState(call.Argument(0).String())
++	if err != nil {
++		stub.lastErr = err
++		return otto.NullValue()
++	}
++
++	var value string
++	json.Unmarshal(res, &value)
++	logger.Warning("GetState", call.Argument(0).String(), value)
++	return ottoStringValue(value)
++}
++
++func builtinShim_PutState(call otto.FunctionCall) otto.Value {
++	logger.Warning("PutState, arg#", len(call.ArgumentList))
++	stub, err := getShimStub(call)
++	if err != nil {
++		return otto.NaNValue()
++	}
++	if len(call.ArgumentList) < 2 {
++		stub.lastErr = errors.New("Invalid arg number for PutState")
++		return otto.NullValue()
++	}
++
++	logger.Warning("PutState", call.Argument(0).String(), call.Argument(1).String())
++	bytes, _ := json.Marshal(call.Argument(1).String())
++	if err := stub.gostub.PutState(call.Argument(0).String(), bytes); err != nil {
++		stub.lastErr = err
++	}
++
++	return otto.NullValue()
++}
++
++func builtinShim_DelState(call otto.FunctionCall) otto.Value {
++	logger.Warning("DelState, arg#", len(call.ArgumentList))
++	stub, err := getShimStub(call)
++	if err != nil {
++		return otto.NaNValue()
++	}
++	if err := stub.gostub.DelState(call.Argument(0).String()); err != nil {
++		stub.lastErr = err
++	}
++	return otto.NullValue()
++}
++
++func builtinShim_GetStateByRange(call otto.FunctionCall) otto.Value {
++	logger.Warning("GetStateByRange, arg#", len(call.ArgumentList))
++	stub, err := getShimStub(call)
++	if err != nil {
++		return otto.NaNValue()
++	}
++	iter, err := stub.gostub.GetStateByRange(call.Argument(0).String(), call.Argument(1).String())
++	if err != nil {
++		stub.lastErr = err
++		return otto.NullValue()
++	}
++
++	v, err := call.Otto.ToValue(&jCCQueryIterator{iter, "", "", nil})
++	if err != nil {
++		stub.lastErr = err
++		logger.Warning(err.Error())
++	}
++	return v
++}
++
++func NewJavascriptCC(ccid *pb.ChaincodeID) (*JavascriptCC, error) {
++	fpath := filepath.Join(ccid.Path, ccid.Name+"."+ccid.Version)
++	logger.Debugf("jscc code path: %s", fpath)
++	return &JavascriptCC{
++		codepath: filepath.Join(fpath, "src"),
++		vm: nil,
++	}, nil
++}
++
++func (jscc *JavascriptCC) loadSourceCode(stub shim.ChaincodeStubInterface) error {
++	fis, err := ioutil.ReadDir(jscc.codepath)
++	if err != nil {
++		return fmt.Errorf("ReadDir failed %s\n", err)
++	}
++
++	sourcecode := make([]byte, 0)
++	for _, fi := range fis {
++		if fi.IsDir() {
++			continue
++		}
++		if !strings.HasSuffix(fi.Name(), ".js") {
++			continue
++		}
++		name := filepath.Join(jscc.codepath, fi.Name())
++		logger.Warningf("javascript file %s", name)
++
++		src, err := ioutil.ReadFile(name)
++		if err != nil {
++			return err
++		}
++		sourcecode = append(append(sourcecode, []byte("\n")...), src...)
++	}
++
++	if len(sourcecode) == 0 {
++		return errors.New("failed to found js source in " + jscc.codepath)
++	}
++
++	jscc.vm = otto.New()
++	jscc.initShimBuiltin(stub)
++	_, err = jscc.vm.Run(sourcecode)
++	return err
++}
++
++func (jscc *JavascriptCC) initShimBuiltin(stub shim.ChaincodeStubInterface) error {
++	v, err := jscc.vm.ToValue(&jCCShim{stub, nil})
++	if err != nil {
++		fmt.Println("failed toValue of shim")
++		return err
++	}
++	jscc.vm.Set("shim", v)
++	//jscc.vm.SetObjectFunction("shim", "GetState", builtinShim_GetState)
++	//jscc.vm.SetObjectFunction("shim", "PutState", builtinShim_PutState)
++	//jscc.vm.SetObjectFunction("shim", "DelState", builtinShim_DelState)
++	//jscc.vm.SetObjectFunction("shim", "GetStateByRange", builtinShim_GetStateByRange)
++	//jscc.vm.SetObjectFunction("shim", "GetFunction", builtinShim_GetFunction)
++	//jscc.vm.SetObjectFunction("shim", "GetArguments", builtinShim_GetArguments)
++	//jscc.vm.SetObjectFunction("shim", "GetLastError", builtinShim_GetLastError)
++	//jscc.vm.SetObjectFunction("shim", "Success", builtinShim_Success)
++	//jscc.vm.SetObjectFunction("shim", "Error", builtinShim_Error)
++	return nil
++}
++
++func (jscc *JavascriptCC) Init(stub shim.ChaincodeStubInterface) pb.Response {
++	err := jscc.loadSourceCode(stub)
++	if err != nil {
++		return shim.Error(err.Error())
++	}
++
++	cc, err := jscc.vm.Get("chaincode")
++	if err != nil {
++		return shim.Error(err.Error())
++	}
++	if cc.Object() == nil {
++		return shim.Error("invalid chaincode obj" + cc.String())
++	}
++	init_func, err := cc.Object().Get("init")
++	if err != nil {
++		return shim.Error(err.Error())
++	}
++
++	rsp, err := init_func.Call(cc)
++	if err != nil {
++		logger.Warning("init", err.Error())
++	}
++	return toShimResponse(rsp)
++}
++
++func (jscc *JavascriptCC) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
++	if err := jscc.initShimBuiltin(stub); err != nil {
++		return shim.Error(err.Error())
++	}
++
++	cc, err := jscc.vm.Get("chaincode")
++	if err != nil {
++		return shim.Error(err.Error())
++	}
++	if cc.Object() == nil {
++		return shim.Error("invalid chaincode obj" + cc.String())
++	}
++	invoke_func, err := cc.Object().Get("invoke")
++	if err != nil {
++		return shim.Error(err.Error())
++	}
++
++	rsp, err := invoke_func.Call(cc)
++	if err != nil {
++		logger.Warning("invoke", err.Error())
++	}
++	return toShimResponse(rsp)
++}
+diff --git a/core/chaincode/platforms/javascript/platform.go b/core/chaincode/platforms/javascript/platform.go
+new file mode 100644
+index 0000000..ce5ca8a
+--- /dev/null
++++ b/core/chaincode/platforms/javascript/platform.go
+@@ -0,0 +1,154 @@
++/*
++Licensed to the Apache Software Foundation (ASF) under one
++or more contributor license agreements.  See the NOTICE file
++distributed with this work for additional information
++regarding copyright ownership.  The ASF licenses this file
++to you under the Apache License, Version 2.0 (the
++"License"); you may not use this file except in compliance
++with the License.  You may obtain a copy of the License at
++
++  http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing,
++software distributed under the License is distributed on an
++"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++KIND, either express or implied.  See the License for the
++specific language governing permissions and limitations
++under the License.
++*/
++
++package javascript
++
++import (
++	"archive/tar"
++	"bytes"
++	"compress/gzip"
++	"errors"
++	"fmt"
++	"io"
++	"os"
++	"path"
++	"path/filepath"
++	"strings"
++
++	cutil "github.com/hyperledger/fabric/core/container/util"
++	pb "github.com/hyperledger/fabric/protos/peer"
++)
++
++func decodeUrl(spec *pb.ChaincodeSpec) (string, error) {
++	urlLocation := spec.ChaincodeId.Path
++	if urlLocation == "" {
++		return "", errors.New("ChaincodeSpec's path/URL cannot be empty")
++	}
++
++	if strings.LastIndex(urlLocation, "/") == len(urlLocation)-1 {
++		urlLocation = urlLocation[:len(urlLocation)-1]
++	}
++
++	return urlLocation, nil
++}
++
++//tw is expected to have the chaincode in it from GenerateHashcode. This method
++//will just package rest of the bytes
++func writeChaincodePackage(spec *pb.ChaincodeSpec, tw *tar.Writer) error {
++
++	urlLocation, err := decodeUrl(spec)
++	if err != nil {
++		return fmt.Errorf("could not decode url: %s", err)
++	}
++
++	err = cutil.WriteFolderToTarPackage(tw, urlLocation, "", map[string]bool{".js": true}, nil)
++	if err != nil {
++		return fmt.Errorf("Error writing Chaincode package contents: %s", err)
++	}
++	return nil
++}
++
++func getJsChaincodeLocalPath(ccid *pb.ChaincodeID) string {
++	return filepath.Join(ccid.Path, ccid.Name+"."+ccid.Version)
++}
++
++func saveCodePackageToLocal(cds *pb.ChaincodeDeploymentSpec) error {
++	if len(cds.CodePackage) == 0 {
++		return errors.New("empty codepackage")
++	}
++
++	// write codepackage to local-storage
++	g, err := gzip.NewReader(bytes.NewReader(cds.CodePackage))
++	if err != nil {
++		return fmt.Errorf("failed to init gzip reader %s", err.Error())
++	}
++	defer g.Close()
++
++	baseDir := getJsChaincodeLocalPath(cds.ChaincodeSpec.ChaincodeId)
++	t := tar.NewReader(g)
++	for {
++		hdr, err := t.Next()
++		if err == io.EOF {
++			break
++		}
++		if err != nil {
++			return fmt.Errorf("failed to read from tar %s", err.Error())
++		}
++		if hdr.Typeflag != tar.TypeDir {
++			fpath := filepath.Join(baseDir, hdr.Name)
++			if err := os.MkdirAll(path.Dir(fpath), os.ModePerm); err != nil {
++				return fmt.Errorf("failed to create dir %s", err.Error())
++			}
++			ow, err := os.Create(fpath)
++			if err != nil {
++				return fmt.Errorf("failed to create file(%s, %s) %s", cds.ChaincodeSpec.ChaincodeId.Path, hdr.Name, err.Error())
++			}
++
++			if _, err := io.Copy(ow, t); err != nil {
++				return fmt.Errorf("failed to write data %s", err.Error())
++			}
++			ow.Close()
++		}
++	}
++	return nil
++}
++
++// Platform for the Javascript type
++type Platform struct {
++}
++
++func (jsPlatform *Platform) ValidateSpec(spec *pb.ChaincodeSpec) error {
++	return nil
++}
++
++func (jsPlatform *Platform) ValidateDeploymentSpec(spec *pb.ChaincodeDeploymentSpec) error {
++	return nil
++}
++
++func (jsPlatform *Platform) GetDeploymentPayload(spec *pb.ChaincodeSpec) ([]byte, error) {
++
++	var err error
++
++	inputbuf := bytes.NewBuffer(nil)
++	gw := gzip.NewWriter(inputbuf)
++	tw := tar.NewWriter(gw)
++
++	err = writeChaincodePackage(spec, tw)
++
++	tw.Close()
++	gw.Close()
++
++	if err != nil {
++		return nil, err
++	}
++
++	return inputbuf.Bytes(), nil
++}
++
++func (jsPlatform *Platform) GenerateDockerfile(cds *pb.ChaincodeDeploymentSpec) (string, error) {
++	return "", nil
++}
++
++func (jsPlatform *Platform) GenerateDockerBuild(cds *pb.ChaincodeDeploymentSpec, tw *tar.Writer) error {
++	if err := saveCodePackageToLocal(cds); err != nil {
++		return err
++	}
++
++	return cutil.WriteBytesToPackage("codepackage.tgz", cds.CodePackage, tw)
++}
+diff --git a/core/chaincode/platforms/platforms.go b/core/chaincode/platforms/platforms.go
+index 6bbcfec..801b086 100644
+--- a/core/chaincode/platforms/platforms.go
++++ b/core/chaincode/platforms/platforms.go
+@@ -36,6 +36,7 @@ import (
+ 	cutil "github.com/hyperledger/fabric/core/container/util"
+ 	pb "github.com/hyperledger/fabric/protos/peer"
+ 	"github.com/spf13/viper"
++	"github.com/hyperledger/fabric/core/chaincode/platforms/javascript"
+ )
+ 
+ // Interface for validating the specification and and writing the package for
+@@ -60,6 +61,8 @@ func Find(chaincodeType pb.ChaincodeSpec_Type) (Platform, error) {
+ 		return &car.Platform{}, nil
+ 	case pb.ChaincodeSpec_JAVA:
+ 		return &java.Platform{}, nil
++	case pb.ChaincodeSpec_JAVASCRIPT:
++		return &javascript.Platform{}, nil
+ 	default:
+ 		return nil, fmt.Errorf("Unknown chaincodeType: %s", chaincodeType)
+ 	}
+diff --git a/core/container/controller.go b/core/container/controller.go
+index 045c991..482a24a 100644
+--- a/core/container/controller.go
++++ b/core/container/controller.go
+@@ -27,6 +27,7 @@ import (
+ 	"github.com/hyperledger/fabric/core/container/ccintf"
+ 	"github.com/hyperledger/fabric/core/container/dockercontroller"
+ 	"github.com/hyperledger/fabric/core/container/inproccontroller"
++	"github.com/hyperledger/fabric/core/container/interpretercontroller"
+ )
+ 
+ type refCountedLock struct {
+@@ -51,6 +52,7 @@ var vmcontroller *VMController
+ const (
+ 	DOCKER = "Docker"
+ 	SYSTEM = "System"
++	INTERPRETER = "Interpreter"
+ )
+ 
+ //NewVMController - creates/returns singleton
+@@ -69,6 +71,8 @@ func (vmc *VMController) newVM(typ string) api.VM {
+ 		v = dockercontroller.NewDockerVM()
+ 	case SYSTEM:
+ 		v = &inproccontroller.InprocVM{}
++	case INTERPRETER:
++		v = &interpretercontroller.InterpreterVM{}
+ 	default:
+ 		v = &dockercontroller.DockerVM{}
+ 	}
+diff --git a/core/container/interpretercontroller/interpreter_controller.go b/core/container/interpretercontroller/interpreter_controller.go
+new file mode 100644
+index 0000000..837dea6
+--- /dev/null
++++ b/core/container/interpretercontroller/interpreter_controller.go
+@@ -0,0 +1,202 @@
++/*
++Licensed to the Apache Software Foundation (ASF) under one
++or more contributor license agreements.  See the NOTICE file
++distributed with this work for additional information
++regarding copyright ownership.  The ASF licenses this file
++to you under the Apache License, Version 2.0 (the
++"License"); you may not use this file except in compliance
++with the License.  You may obtain a copy of the License at
++
++  http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing,
++software distributed under the License is distributed on an
++"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++KIND, either express or implied.  See the License for the
++specific language governing permissions and limitations
++under the License.
++*/
++
++package interpretercontroller
++
++import (
++	"fmt"
++	"io"
++
++	"github.com/hyperledger/fabric/core/chaincode/shim"
++	container "github.com/hyperledger/fabric/core/container/api"
++	"github.com/hyperledger/fabric/core/container/ccintf"
++	pb "github.com/hyperledger/fabric/protos/peer"
++	"github.com/op/go-logging"
++
++	"errors"
++	"io/ioutil"
++	"os"
++
++	"golang.org/x/net/context"
++	"path/filepath"
++	"github.com/hyperledger/fabric/core/chaincode/platforms/javascript/jscc"
++)
++
++type interpreterContainer struct {
++	chaincode shim.Chaincode
++	running   bool
++	args      []string
++	env       []string
++	stopChan  chan struct{}
++}
++
++var (
++	interpreterLogger = logging.MustGetLogger("interpretercontroller")
++	instRegistry      = make(map[string]*interpreterContainer)
++)
++
++//InterpreterVM is a vm. It is identified by chaincode type
++type InterpreterVM struct {
++}
++
++func (vm *InterpreterVM) getInstance(ccid ccintf.CCID, instName string, args []string, env []string) (*interpreterContainer, error) {
++	if ccid.ChaincodeSpec.Type == pb.ChaincodeSpec_JAVASCRIPT {
++		ipc := instRegistry[instName]
++		if ipc != nil {
++			interpreterLogger.Warningf("chaincode instance exists for %s", instName)
++			return ipc, nil
++		}
++		var chaincode shim.Chaincode
++		chaincode, err := jscc.NewJavascriptCC(ccid.ChaincodeSpec.ChaincodeId)
++		if err != nil {
++			return nil, err
++		}
++		ipc = &interpreterContainer{args: args, env: env, chaincode: chaincode, stopChan: make(chan struct{})}
++		instRegistry[instName] = ipc
++		interpreterLogger.Debugf("chaincode instance created for %s", instName)
++		return ipc, nil
++	}
++	return nil, fmt.Errorf("unknown script type %d", ccid.ChaincodeSpec.Type)
++}
++
++func (vm *InterpreterVM) Deploy(ctxt context.Context, ccid ccintf.CCID, args []string, env []string, reader io.Reader) error {
++	//FIXME: deprecated interface??
++	return nil
++}
++
++func (interpreter *interpreterContainer) launch(ctxt context.Context, id string, args []string, env []string, ccSupport ccintf.CCSupport) error {
++	peerRcvCCSend := make(chan *pb.ChaincodeMessage)
++	ccRcvPeerSend := make(chan *pb.ChaincodeMessage)
++	var err error
++	ccchan := make(chan struct{}, 1)
++	ccsupportchan := make(chan struct{}, 1)
++	go func() {
++		defer close(ccchan)
++		interpreterLogger.Debugf("chaincode started for %s", id)
++		if args == nil {
++			args = interpreter.args
++		}
++		if env == nil {
++			env = interpreter.env
++		}
++		err := shim.StartInProc(env, args, interpreter.chaincode, ccRcvPeerSend, peerRcvCCSend)
++		if err != nil {
++			err = fmt.Errorf("chaincode-support ended with err: %s", err)
++			interpreterLogger.Errorf("%s", err)
++		}
++		interpreterLogger.Debugf("chaincode ended with for  %s with err: %s", id, err)
++	}()
++
++	go func() {
++		defer close(ccsupportchan)
++		inprocStream := newInProcStream(peerRcvCCSend, ccRcvPeerSend)
++		interpreterLogger.Debugf("chaincode-support started for  %s", id)
++		err := ccSupport.HandleChaincodeStream(ctxt, inprocStream)
++		if err != nil {
++			err = fmt.Errorf("chaincode ended with err: %s", err)
++			interpreterLogger.Errorf("%s", err)
++		}
++		interpreterLogger.Debugf("chaincode-support ended with for  %s with err: %s", id, err)
++	}()
++
++	select {
++	case <-ccchan:
++		close(peerRcvCCSend)
++		interpreterLogger.Debugf("chaincode %s quit", id)
++	case <-ccsupportchan:
++		close(ccRcvPeerSend)
++		interpreterLogger.Debugf("chaincode support %s quit", id)
++	case <-interpreter.stopChan:
++		close(ccRcvPeerSend)
++		close(peerRcvCCSend)
++		interpreterLogger.Debugf("chaincode %s stopped", id)
++	}
++
++	return err
++}
++
++func (vm *InterpreterVM) Start(ctxt context.Context, ccid ccintf.CCID, args []string, env []string, builder container.BuildSpecFactory) error {
++	chaincodeID := ccid.ChaincodeSpec.ChaincodeId
++	path := filepath.Join(chaincodeID.Path, chaincodeID.Name + "." + chaincodeID.Version)
++	_, err := os.Stat(path)
++	if os.IsNotExist(err) {
++		reader, err := builder()
++		if err != nil {
++			return err
++		}
++		ioutil.ReadAll(reader)
++	}
++
++	instName, _ := vm.GetVMName(ccid)
++	interpreter, err := vm.getInstance(ccid, instName, args, env)
++	if err != nil {
++		return fmt.Errorf(fmt.Sprintf("start - could not create interpreter %s", err.Error()))
++	}
++	if interpreter.running {
++		return fmt.Errorf(fmt.Sprintf("chaincode running %s", instName))
++	}
++
++	ccSupport, ok := ctxt.Value(ccintf.GetCCHandlerKey()).(ccintf.CCSupport)
++	if !ok || ccSupport == nil {
++		return errors.New("start - in-process communication generator not supplied")
++	}
++
++	interpreterLogger.Debugf("Start container %s", instName)
++	go func() {
++		defer func() {
++			if r := recover(); r != nil {
++				interpreterLogger.Criticalf("caught panic from chaincode  %s", instName)
++			}
++		}()
++		interpreter.launch(ctxt, instName, args, env, ccSupport)
++	}()
++
++	return nil
++}
++
++func (vm *InterpreterVM) Stop(ctxt context.Context, ccid ccintf.CCID, timeout uint, dontkill bool, dontremove bool) error {
++
++	instName, _ := vm.GetVMName(ccid)
++
++	ipc := instRegistry[instName]
++
++	if ipc == nil {
++		return fmt.Errorf("%s not found", instName)
++	}
++
++	if !ipc.running {
++		return fmt.Errorf("%s not running", instName)
++	}
++
++	ipc.stopChan <- struct{}{}
++
++	delete(instRegistry, instName)
++	return nil
++}
++
++//Destroy destroys an image
++func (vm *InterpreterVM) Destroy(ctxt context.Context, ccid ccintf.CCID, force bool, noprune bool) error {
++	//TODO remove script files
++	return nil
++}
++
++//GetVMName ignores the peer and network name as it just needs to be unique in process
++func (vm *InterpreterVM) GetVMName(ccid ccintf.CCID) (string, error) {
++	return ccid.GetName(), nil
++}
+diff --git a/core/container/interpretercontroller/interpreter_stream.go b/core/container/interpretercontroller/interpreter_stream.go
+new file mode 100644
+index 0000000..2085612
+--- /dev/null
++++ b/core/container/interpretercontroller/interpreter_stream.go
+@@ -0,0 +1,44 @@
++/*
++Licensed to the Apache Software Foundation (ASF) under one
++or more contributor license agreements.  See the NOTICE file
++distributed with this work for additional information
++regarding copyright ownership.  The ASF licenses this file
++to you under the Apache License, Version 2.0 (the
++"License"); you may not use this file except in compliance
++with the License.  You may obtain a copy of the License at
++
++  http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing,
++software distributed under the License is distributed on an
++"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
++KIND, either express or implied.  See the License for the
++specific language governing permissions and limitations
++under the License.
++*/
++
++package interpretercontroller
++
++import (
++	pb "github.com/hyperledger/fabric/protos/peer"
++)
++
++// PeerChaincodeStream interface for stream between Peer and chaincode instance.
++type interpreterStream struct {
++	recv <-chan *pb.ChaincodeMessage
++	send chan<- *pb.ChaincodeMessage
++}
++
++func newInProcStream(recv <-chan *pb.ChaincodeMessage, send chan<- *pb.ChaincodeMessage) *interpreterStream {
++	return &interpreterStream{recv, send}
++}
++
++func (s *interpreterStream) Send(msg *pb.ChaincodeMessage) error {
++	s.send <- msg
++	return nil
++}
++
++func (s *interpreterStream) Recv() (*pb.ChaincodeMessage, error) {
++	msg := <-s.recv
++	return msg, nil
++}
+diff --git a/examples/chaincode/javascript/example02/example02.js b/examples/chaincode/javascript/example02/example02.js
+new file mode 100644
+index 0000000..44ca768
+--- /dev/null
++++ b/examples/chaincode/javascript/example02/example02.js
+@@ -0,0 +1,51 @@
++var chaincode = {};
++
++chaincode.init = function() {
++    return shim.Success("hello, init");
++}
++
++chaincode.invoke = function() {
++    var args = JSON.parse(shim.GetArguments());
++    if (args.length < 2) {
++        return shim.Error("invalid request, arg count " + args.length);
++    }
++
++    switch (args[0]) {
++    case "put":
++        if (args.length < 3) {
++            return shim.Error("invalid put request, arg count " + args.length);
++        }
++        shim.PutState(args[1], args[2]);
++        return;
++
++    case "get":
++        var result = shim.GetState(args[1]);
++        if (shim.GetLastError() != null) {
++            return shim.Error(shim.GetLastError());
++        }
++        return shim.Success(result);
++
++    case "rangequery":
++        if (args.length < 3) {
++            return shim.Error("invalid range-query request, arg count " + args.length);
++        }
++        var ite = shim.GetStateByRange(args[1], args[2]);
++        if (shim.GetLastError() != null) {
++            return shim.Error(shim.GetLastError());
++        }
++        var count = 0;
++        while (ite.HasNext()) {
++            if (ite.Next()) {
++                var key = ite.GetCurrentKey();
++                var val = ite.GetCurrentValue();
++                console.log("key", key, "value", val);
++                count++
++            } else {
++                return shim.Error(ite.GetError());
++            }
++        }
++        ite.Close();
++        return shim.Success(count.toString());
++    }
++}
++
+diff --git a/peer/chaincode/common.go b/peer/chaincode/common.go
+index ff9dece..b38180c 100644
+--- a/peer/chaincode/common.go
++++ b/peer/chaincode/common.go
+@@ -67,7 +67,11 @@ func getChaincodeDeploymentSpec(spec *pb.ChaincodeSpec, crtPkg bool) (*pb.Chainc
+ 			return nil, err
+ 		}
+ 	}
+-	chaincodeDeploymentSpec := &pb.ChaincodeDeploymentSpec{ChaincodeSpec: spec, CodePackage: codePackageBytes}
++	execEnv := pb.ChaincodeDeploymentSpec_DOCKER
++	if spec.Type == pb.ChaincodeSpec_JAVASCRIPT {
++		execEnv = pb.ChaincodeDeploymentSpec_INTERPRETER
++	}
++	chaincodeDeploymentSpec := &pb.ChaincodeDeploymentSpec{ChaincodeSpec: spec, CodePackage: codePackageBytes, ExecEnv: execEnv}
+ 	return chaincodeDeploymentSpec, nil
+ }
+ 
+diff --git a/protos/peer/chaincode.pb.go b/protos/peer/chaincode.pb.go
+index c45f51a..6029bc1 100644
+--- a/protos/peer/chaincode.pb.go
++++ b/protos/peer/chaincode.pb.go
+@@ -38,11 +38,12 @@ func (ConfidentialityLevel) EnumDescriptor() ([]byte, []int) { return fileDescri
+ type ChaincodeSpec_Type int32
+ 
+ const (
+-	ChaincodeSpec_UNDEFINED ChaincodeSpec_Type = 0
+-	ChaincodeSpec_GOLANG    ChaincodeSpec_Type = 1
+-	ChaincodeSpec_NODE      ChaincodeSpec_Type = 2
+-	ChaincodeSpec_CAR       ChaincodeSpec_Type = 3
+-	ChaincodeSpec_JAVA      ChaincodeSpec_Type = 4
++	ChaincodeSpec_UNDEFINED  ChaincodeSpec_Type = 0
++	ChaincodeSpec_GOLANG     ChaincodeSpec_Type = 1
++	ChaincodeSpec_NODE       ChaincodeSpec_Type = 2
++	ChaincodeSpec_CAR        ChaincodeSpec_Type = 3
++	ChaincodeSpec_JAVA       ChaincodeSpec_Type = 4
++	ChaincodeSpec_JAVASCRIPT ChaincodeSpec_Type = 5
+ )
+ 
+ var ChaincodeSpec_Type_name = map[int32]string{
+@@ -51,13 +52,15 @@ var ChaincodeSpec_Type_name = map[int32]string{
+ 	2: "NODE",
+ 	3: "CAR",
+ 	4: "JAVA",
++	5: "JAVASCRIPT",
+ }
+ var ChaincodeSpec_Type_value = map[string]int32{
+-	"UNDEFINED": 0,
+-	"GOLANG":    1,
+-	"NODE":      2,
+-	"CAR":       3,
+-	"JAVA":      4,
++	"UNDEFINED":  0,
++	"GOLANG":     1,
++	"NODE":       2,
++	"CAR":        3,
++	"JAVA":       4,
++	"JAVASCRIPT": 5,
+ }
+ 
+ func (x ChaincodeSpec_Type) String() string {
+@@ -68,17 +71,20 @@ func (ChaincodeSpec_Type) EnumDescriptor() ([]byte, []int) { return fileDescript
+ type ChaincodeDeploymentSpec_ExecutionEnvironment int32
+ 
+ const (
+-	ChaincodeDeploymentSpec_DOCKER ChaincodeDeploymentSpec_ExecutionEnvironment = 0
+-	ChaincodeDeploymentSpec_SYSTEM ChaincodeDeploymentSpec_ExecutionEnvironment = 1
++	ChaincodeDeploymentSpec_DOCKER      ChaincodeDeploymentSpec_ExecutionEnvironment = 0
++	ChaincodeDeploymentSpec_SYSTEM      ChaincodeDeploymentSpec_ExecutionEnvironment = 1
++	ChaincodeDeploymentSpec_INTERPRETER ChaincodeDeploymentSpec_ExecutionEnvironment = 2
+ )
+ 
+ var ChaincodeDeploymentSpec_ExecutionEnvironment_name = map[int32]string{
+ 	0: "DOCKER",
+ 	1: "SYSTEM",
++	2: "INTERPRETER",
+ }
+ var ChaincodeDeploymentSpec_ExecutionEnvironment_value = map[string]int32{
+-	"DOCKER": 0,
+-	"SYSTEM": 1,
++	"DOCKER":      0,
++	"SYSTEM":      1,
++	"INTERPRETER": 2,
+ }
+ 
+ func (x ChaincodeDeploymentSpec_ExecutionEnvironment) String() string {
+@@ -281,42 +287,44 @@ func init() {
+ func init() { proto.RegisterFile("peer/chaincode.proto", fileDescriptor1) }
+ 
+ var fileDescriptor1 = []byte{
+-	// 591 bytes of a gzipped FileDescriptorProto
+-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xac, 0x93, 0x5d, 0x6f, 0xd3, 0x3e,
+-	0x14, 0xc6, 0x97, 0xb5, 0x7b, 0x3b, 0x7d, 0xf9, 0xe7, 0x6f, 0x06, 0x54, 0xbb, 0x61, 0x44, 0x5c,
+-	0x8c, 0x09, 0xa5, 0x52, 0x99, 0xb8, 0x42, 0x48, 0x59, 0x93, 0x4d, 0x81, 0xd2, 0x4c, 0x59, 0x87,
+-	0x04, 0x37, 0x95, 0x9b, 0x9c, 0xa6, 0x16, 0xa9, 0x1d, 0x25, 0x6e, 0xb4, 0x5e, 0xf3, 0xbd, 0xf8,
+-	0x6a, 0x20, 0x3b, 0x6b, 0xb7, 0xa9, 0xbb, 0xe4, 0x2a, 0xf6, 0x93, 0xe7, 0xd8, 0xcf, 0xf9, 0xe9,
+-	0x18, 0x0e, 0x33, 0xc4, 0xbc, 0x1b, 0xcd, 0x28, 0xe3, 0x91, 0x88, 0xd1, 0xce, 0x72, 0x21, 0x05,
+-	0xd9, 0xd5, 0x9f, 0xe2, 0xe8, 0x55, 0x22, 0x44, 0x92, 0x62, 0x57, 0x6f, 0x27, 0x8b, 0x69, 0x57,
+-	0xb2, 0x39, 0x16, 0x92, 0xce, 0xb3, 0xca, 0x68, 0x05, 0xd0, 0xe8, 0xaf, 0x6a, 0x7d, 0x97, 0x10,
+-	0xa8, 0x67, 0x54, 0xce, 0x3a, 0xc6, 0xb1, 0x71, 0x72, 0x10, 0xea, 0xb5, 0xd2, 0x38, 0x9d, 0x63,
+-	0x67, 0xbb, 0xd2, 0xd4, 0x9a, 0x74, 0x60, 0xaf, 0xc4, 0xbc, 0x60, 0x82, 0x77, 0x6a, 0x5a, 0x5e,
+-	0x6d, 0xad, 0x37, 0xd0, 0xbe, 0x3f, 0x90, 0x67, 0x0b, 0xa9, 0xea, 0x69, 0x9e, 0x14, 0x1d, 0xe3,
+-	0xb8, 0x76, 0xd2, 0x0c, 0xf5, 0xda, 0xfa, 0x63, 0x40, 0x6b, 0x6d, 0xbb, 0xce, 0x30, 0x22, 0x36,
+-	0xd4, 0xe5, 0x32, 0x43, 0x7d, 0x73, 0xbb, 0x77, 0x54, 0xc5, 0x2b, 0xec, 0x47, 0x26, 0x7b, 0xb4,
+-	0xcc, 0x30, 0xd4, 0x3e, 0xf2, 0x01, 0x9a, 0xeb, 0xa6, 0xc7, 0x2c, 0xd6, 0xe9, 0x1a, 0xbd, 0x67,
+-	0x1b, 0x75, 0xbe, 0x1b, 0x36, 0xd6, 0x46, 0x3f, 0x26, 0xef, 0x60, 0x87, 0xa9, 0x58, 0x3a, 0x77,
+-	0xa3, 0xf7, 0x62, 0xb3, 0x40, 0xfd, 0x0d, 0x2b, 0x93, 0xea, 0x53, 0x11, 0x13, 0x0b, 0xd9, 0xa9,
+-	0x1f, 0x1b, 0x27, 0x3b, 0xe1, 0x6a, 0x6b, 0x7d, 0x82, 0xba, 0x4a, 0x43, 0x5a, 0x70, 0x70, 0x33,
+-	0x74, 0xbd, 0x0b, 0x7f, 0xe8, 0xb9, 0xe6, 0x16, 0x01, 0xd8, 0xbd, 0x0c, 0x06, 0xce, 0xf0, 0xd2,
+-	0x34, 0xc8, 0x3e, 0xd4, 0x87, 0x81, 0xeb, 0x99, 0xdb, 0x64, 0x0f, 0x6a, 0x7d, 0x27, 0x34, 0x6b,
+-	0x4a, 0xfa, 0xec, 0x7c, 0x73, 0xcc, 0xba, 0xf5, 0x7b, 0x1b, 0x5e, 0xae, 0xef, 0x74, 0x31, 0x4b,
+-	0xc5, 0x72, 0x8e, 0x5c, 0x6a, 0x16, 0x1f, 0xa1, 0x7d, 0xdf, 0x5b, 0x91, 0x61, 0xa4, 0xa9, 0x34,
+-	0x7a, 0xcf, 0x9f, 0xa4, 0x12, 0xb6, 0xa2, 0x47, 0x24, 0x1d, 0x68, 0xe3, 0x74, 0x8a, 0x91, 0x64,
+-	0x25, 0x8e, 0x63, 0x2a, 0xf1, 0x8e, 0xcd, 0x91, 0x5d, 0x0d, 0x83, 0xbd, 0x1a, 0x06, 0x7b, 0xb4,
+-	0x1a, 0x86, 0xb0, 0xb5, 0xae, 0x70, 0xa9, 0x44, 0xf2, 0x1a, 0x9a, 0xfa, 0xee, 0x8c, 0x46, 0x3f,
+-	0x69, 0x82, 0x9a, 0x55, 0x33, 0x6c, 0x28, 0xed, 0xaa, 0x92, 0x48, 0x00, 0xfb, 0x78, 0x8b, 0xd1,
+-	0x18, 0x79, 0xa9, 0xd1, 0xb4, 0x7b, 0x67, 0x1b, 0xe9, 0x1e, 0xb7, 0x65, 0x7b, 0xb7, 0x18, 0x2d,
+-	0x24, 0x13, 0xdc, 0xe3, 0x25, 0xcb, 0x05, 0x57, 0x3f, 0xc2, 0x3d, 0x75, 0x8a, 0xc7, 0x4b, 0xcb,
+-	0x86, 0xc3, 0xa7, 0x0c, 0x8a, 0xa8, 0x1b, 0xf4, 0xbf, 0x78, 0x61, 0x45, 0xf7, 0xfa, 0xfb, 0xf5,
+-	0xc8, 0xfb, 0x6a, 0x1a, 0xd6, 0x2f, 0xe3, 0x01, 0x40, 0x9f, 0x97, 0x22, 0xa2, 0xaa, 0xf4, 0x1f,
+-	0x00, 0x3c, 0x85, 0xff, 0x59, 0x3c, 0x4e, 0x90, 0x63, 0xae, 0x8f, 0x1c, 0xd3, 0x34, 0xb9, 0x9b,
+-	0xfe, 0xff, 0x58, 0x7c, 0xb9, 0xd6, 0x9d, 0x34, 0x39, 0x3d, 0x83, 0xc3, 0xbe, 0xe0, 0x53, 0x16,
+-	0x23, 0x97, 0x8c, 0xa6, 0x4c, 0x2e, 0x07, 0x58, 0x62, 0xaa, 0x92, 0x5e, 0xdd, 0x9c, 0x0f, 0xfc,
+-	0xbe, 0xb9, 0x45, 0x4c, 0x68, 0xf6, 0x83, 0xe1, 0x85, 0xef, 0x7a, 0xc3, 0x91, 0xef, 0x0c, 0x4c,
+-	0xe3, 0x3c, 0x00, 0x4b, 0xe4, 0x89, 0x3d, 0x5b, 0x66, 0x98, 0xa7, 0x18, 0x27, 0x98, 0xdb, 0x53,
+-	0x3a, 0xc9, 0x59, 0xb4, 0xca, 0xa7, 0x1e, 0xf5, 0x8f, 0xb7, 0x09, 0x93, 0xb3, 0xc5, 0xc4, 0x8e,
+-	0xc4, 0xbc, 0xfb, 0xc0, 0xda, 0xad, 0xac, 0xd5, 0x9b, 0x2e, 0xba, 0xca, 0x3a, 0xa9, 0xde, 0xfb,
+-	0xfb, 0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x05, 0x18, 0x06, 0x44, 0x0e, 0x04, 0x00, 0x00,
++	// 617 bytes of a gzipped FileDescriptorProto
++	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xac, 0x54, 0x5d, 0x6f, 0xda, 0x4a,
++	0x10, 0x8d, 0x81, 0x7c, 0x0d, 0x1f, 0xf1, 0xdd, 0x9b, 0x7b, 0x8b, 0xf2, 0xd2, 0xd4, 0xea, 0x43,
++	0x1a, 0x55, 0x46, 0xa2, 0x51, 0x9f, 0x2a, 0x55, 0x04, 0x3b, 0x91, 0x5b, 0x6a, 0xd0, 0x42, 0x2a,
++	0xb5, 0x2f, 0xc8, 0xd8, 0x83, 0x59, 0xd5, 0xec, 0x5a, 0xf6, 0x62, 0x85, 0xe7, 0xfe, 0x80, 0xfe,
++	0xb4, 0xfe, 0xa5, 0x6a, 0xd7, 0x81, 0x24, 0x4a, 0x1e, 0xfb, 0xe4, 0xd9, 0xb3, 0x67, 0x66, 0xcf,
++	0x1c, 0xcd, 0x18, 0x8e, 0x53, 0xc4, 0xac, 0x13, 0x2e, 0x02, 0xc6, 0x43, 0x11, 0xa1, 0x9d, 0x66,
++	0x42, 0x0a, 0xb2, 0xa7, 0x3f, 0xf9, 0xc9, 0xcb, 0x58, 0x88, 0x38, 0xc1, 0x8e, 0x3e, 0xce, 0x56,
++	0xf3, 0x8e, 0x64, 0x4b, 0xcc, 0x65, 0xb0, 0x4c, 0x4b, 0xa2, 0x35, 0x84, 0x7a, 0x7f, 0x93, 0xeb,
++	0x39, 0x84, 0x40, 0x2d, 0x0d, 0xe4, 0xa2, 0x6d, 0x9c, 0x1a, 0x67, 0x87, 0x54, 0xc7, 0x0a, 0xe3,
++	0xc1, 0x12, 0xdb, 0x95, 0x12, 0x53, 0x31, 0x69, 0xc3, 0x7e, 0x81, 0x59, 0xce, 0x04, 0x6f, 0x57,
++	0x35, 0xbc, 0x39, 0x5a, 0xaf, 0xa1, 0x75, 0x5f, 0x90, 0xa7, 0x2b, 0xa9, 0xf2, 0x83, 0x2c, 0xce,
++	0xdb, 0xc6, 0x69, 0xf5, 0xac, 0x41, 0x75, 0x6c, 0xfd, 0xaa, 0x40, 0x73, 0x4b, 0x1b, 0xa7, 0x18,
++	0x12, 0x1b, 0x6a, 0x72, 0x9d, 0xa2, 0x7e, 0xb9, 0xd5, 0x3d, 0x29, 0xe5, 0xe5, 0xf6, 0x23, 0x92,
++	0x3d, 0x59, 0xa7, 0x48, 0x35, 0x8f, 0xbc, 0x87, 0xc6, 0xb6, 0xe9, 0x29, 0x8b, 0xb4, 0xba, 0x7a,
++	0xf7, 0xdf, 0x27, 0x79, 0x9e, 0x43, 0xeb, 0x5b, 0xa2, 0x17, 0x91, 0xb7, 0xb0, 0xcb, 0x94, 0x2c,
++	0xad, 0xbb, 0xde, 0xfd, 0xff, 0x69, 0x82, 0xba, 0xa5, 0x25, 0x49, 0xf5, 0xa9, 0x1c, 0x13, 0x2b,
++	0xd9, 0xae, 0x9d, 0x1a, 0x67, 0xbb, 0x74, 0x73, 0xb4, 0x7c, 0xa8, 0x29, 0x35, 0xa4, 0x09, 0x87,
++	0x37, 0xbe, 0xe3, 0x5e, 0x79, 0xbe, 0xeb, 0x98, 0x3b, 0x04, 0x60, 0xef, 0x7a, 0x38, 0xe8, 0xf9,
++	0xd7, 0xa6, 0x41, 0x0e, 0xa0, 0xe6, 0x0f, 0x1d, 0xd7, 0xac, 0x90, 0x7d, 0xa8, 0xf6, 0x7b, 0xd4,
++	0xac, 0x2a, 0xe8, 0x53, 0xef, 0x6b, 0xcf, 0xac, 0x91, 0x16, 0x80, 0x8a, 0xc6, 0x7d, 0xea, 0x8d,
++	0x26, 0xe6, 0xae, 0xf5, 0xbb, 0x02, 0x2f, 0xb6, 0x1a, 0x1c, 0x4c, 0x13, 0xb1, 0x5e, 0x22, 0x97,
++	0xda, 0x9b, 0x0f, 0xd0, 0xba, 0xef, 0x35, 0x4f, 0x31, 0xd4, 0x2e, 0xd5, 0xbb, 0xff, 0x3d, 0xeb,
++	0x12, 0x6d, 0x86, 0x8f, 0x9c, 0xed, 0x41, 0x0b, 0xe7, 0x73, 0x0c, 0x25, 0x2b, 0x70, 0x1a, 0x05,
++	0x12, 0xef, 0xbc, 0x3a, 0xb1, 0xcb, 0xe1, 0xb0, 0x37, 0xc3, 0x61, 0x4f, 0x36, 0xc3, 0x41, 0x9b,
++	0xdb, 0x0c, 0x27, 0x90, 0x48, 0x5e, 0x41, 0x43, 0xbf, 0x9d, 0x06, 0xe1, 0x8f, 0x20, 0x46, 0xed,
++	0x5d, 0x83, 0xd6, 0x15, 0x36, 0x2a, 0x21, 0x32, 0x84, 0x03, 0xbc, 0xc5, 0x70, 0x8a, 0xbc, 0xd0,
++	0x56, 0xb5, 0xba, 0x17, 0x4f, 0xd4, 0x3d, 0x6e, 0xcb, 0x76, 0x6f, 0x31, 0x5c, 0x49, 0x26, 0xb8,
++	0xcb, 0x0b, 0x96, 0x09, 0xae, 0x2e, 0xe8, 0xbe, 0xaa, 0xe2, 0xf2, 0xc2, 0xfa, 0x08, 0xc7, 0xcf,
++	0x11, 0x94, 0xc3, 0xce, 0xb0, 0xff, 0xd9, 0xa5, 0xa5, 0xdb, 0xe3, 0x6f, 0xe3, 0x89, 0xfb, 0xc5,
++	0x34, 0xc8, 0x11, 0xd4, 0x3d, 0x7f, 0xe2, 0xd2, 0x11, 0x75, 0x27, 0x2e, 0x35, 0x2b, 0xd6, 0x4f,
++	0xe3, 0x81, 0xa3, 0x1e, 0x2f, 0x44, 0x18, 0xa8, 0x5a, 0x7f, 0xc1, 0xd1, 0x73, 0xf8, 0x87, 0x45,
++	0xd3, 0x18, 0x39, 0x66, 0xba, 0xe4, 0x34, 0x48, 0xe2, 0xbb, 0xf5, 0x38, 0x62, 0xd1, 0xf5, 0x16,
++	0xef, 0x25, 0xf1, 0xf9, 0x05, 0x1c, 0xf7, 0x05, 0x9f, 0xb3, 0x08, 0xb9, 0x64, 0x41, 0xc2, 0xe4,
++	0x7a, 0x80, 0x05, 0x26, 0x4a, 0xfa, 0xe8, 0xe6, 0x72, 0xe0, 0xf5, 0xcd, 0x1d, 0x62, 0x42, 0xa3,
++	0x3f, 0xf4, 0xaf, 0x3c, 0xc7, 0xf5, 0x27, 0x5e, 0x6f, 0x60, 0x1a, 0x97, 0x43, 0xb0, 0x44, 0x16,
++	0xdb, 0x8b, 0x75, 0x8a, 0x59, 0x82, 0x51, 0x8c, 0x99, 0x3d, 0x0f, 0x66, 0x19, 0x0b, 0x37, 0xfa,
++	0xd4, 0xd6, 0x7f, 0x7f, 0x13, 0x33, 0xb9, 0x58, 0xcd, 0xec, 0x50, 0x2c, 0x3b, 0x0f, 0xa8, 0x9d,
++	0x92, 0x5a, 0x2e, 0x7d, 0xde, 0x51, 0xd4, 0x59, 0xf9, 0x43, 0x78, 0xf7, 0x27, 0x00, 0x00, 0xff,
++	0xff, 0x04, 0x34, 0xea, 0xe3, 0x2f, 0x04, 0x00, 0x00,
+ }
+diff --git a/protos/peer/chaincode.proto b/protos/peer/chaincode.proto
+index ec6e1bb..c96a17c 100644
+--- a/protos/peer/chaincode.proto
++++ b/protos/peer/chaincode.proto
+@@ -65,6 +65,7 @@ message ChaincodeSpec {
+         NODE = 2;
+         CAR = 3;
+         JAVA = 4;
++        JAVASCRIPT = 5;
+     }
+ 
+     Type type = 1;
+@@ -80,6 +81,7 @@ message ChaincodeDeploymentSpec {
+     enum ExecutionEnvironment {
+         DOCKER = 0;
+         SYSTEM = 1;
++        INTERPRETER = 2;
+     }
+ 
+     ChaincodeSpec chaincode_spec = 1;
+diff --git a/vendor/github.com/robertkrimen/otto b/vendor/github.com/robertkrimen/otto
+new file mode 160000
+index 0000000..6a77b7c
+--- /dev/null
++++ b/vendor/github.com/robertkrimen/otto
+@@ -0,0 +1 @@
++Subproject commit 6a77b7cbc37d0c39f7d5fa5766826e541df31fd5
+diff --git a/vendor/gopkg.in/sourcemap.v1 b/vendor/gopkg.in/sourcemap.v1
+new file mode 160000
+index 0000000..eef8f47
+--- /dev/null
++++ b/vendor/gopkg.in/sourcemap.v1
+@@ -0,0 +1 @@
++Subproject commit eef8f47ab679652a7d3a4ee34c34314d255d2536
