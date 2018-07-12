@@ -1,6 +1,6 @@
 # P2P Server
 
-## function list
+## Function List
 
 * initialization
 
@@ -25,7 +25,7 @@
 
 
 
-## server state
+## Server State
 
 ```
 type Server {
