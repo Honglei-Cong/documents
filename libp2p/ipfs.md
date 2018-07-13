@@ -102,4 +102,25 @@ unicast是通过messageSender创建stream，然后在stream上发送。
 IpFSDHT.strmap保存了peerID到msg sender的mapping。
 
 
+## Bitswap
+
+```
+// BitSwapNetwork provides network connectivity for BitSwap sessions
+type BitSwapNetwork interface {
+
+	// SendMessage sends a BitSwap message to a peer.
+	SendMessage(context.Context, peer.ID, bsmsg.BitSwapMessage) error
+
+	// SetDelegate registers the Reciver to handle messages 
+	// received from the network.
+	SetDelegate(Receiver)
+	ConnectTo(context.Context, peer.ID) error
+	NewMessageSender(context.Context, peer.ID) (MessageSender, error)
+	ConnectionManager() ifconnmgr.ConnManager
+	Routing
+}
+```
+
+
+
 

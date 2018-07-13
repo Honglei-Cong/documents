@@ -1,6 +1,8 @@
 ## Transport
 
 ```
+// Transport represents any device by which you can connect to and 
+// accept connections from other peers.
 type Transport interface {
 	Dialer(local_addr, opt) (Dialer, error)
 	Listen(local_addr) (Listener, error)

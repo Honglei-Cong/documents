@@ -1,6 +1,9 @@
 ## Network
 
 ```
+// Network is the interface used to connect to the outside world.
+// It dials and listens for connections. it uses a Swarm to pool
+// connections.
 type Network interface {
 	Dialer
 	io.Closer

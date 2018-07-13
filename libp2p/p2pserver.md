@@ -4,7 +4,6 @@
 
 * initialization
 
-
 * start
 
 1. network start
@@ -16,9 +15,7 @@
 7. start heartbeat service
 8. start block syncing
 
-
 * stop
-
 
 * block sync
 

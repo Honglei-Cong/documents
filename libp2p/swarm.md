@@ -22,6 +22,10 @@
 
 ```
 // 一个host的链接管理器，接收远程链接，创建远程链接，管理active的链接
+// Swarm is a connection muxer, allowing connections to other peers to
+// be opened and closed, while still using the same Chan for all
+// communication. The Chan sends/receives Messages, which note the
+// destination or source Peer.
 type Swarm struct {
 	refs			sync.WaitGroup
 	local		peer.ID
