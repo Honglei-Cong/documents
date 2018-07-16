@@ -12,7 +12,7 @@ Furthermore, with Ethereum 2 research beginning as a relatively green-field proj
   * Security audits planned/executed?
   * Node identity and authentication (perhaps verifiable from sources outside of peer network)
   * Peer selection strategies (is random-walk appropriate)
-o	In degree vs out degree measurement for connection rebalancing
+  * In degree vs out degree measurement for connection rebalancing
 * Connection management (likely relevant to ongoing peer swarm refactoring)
   * Pluggable ConnManager?
 * Gossipsub
