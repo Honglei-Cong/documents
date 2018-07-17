@@ -1,6 +1,6 @@
 ## Requirement
 
-a draft for next Ontology p2p server design.
+a draft for next p2p server design.
 
 
 1.	support tcp/udp
