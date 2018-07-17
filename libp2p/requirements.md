@@ -31,7 +31,7 @@ a draft for next Ontology p2p server design.
 22.	support NAT (optional)
 
 
-###Reference
+### Reference
 
 * Epidemic Broadcast Tree
 * GoCast: Gossip-Enhanced Overlay Multicast for Fast and Dependable Group Communication
