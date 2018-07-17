@@ -14,17 +14,18 @@ a draft for next Ontology p2p server design.
 8.	all peers are authenticated
 9.	all msgs are authenticated
 10.	based on protobuf (for interoperations)
+  1. backward compatible
 11.	support connection-based/peer-based metrics
 12.	support connection-based-throttling
 13.	support connection-accept-limitation
 14.	each peer only accepts limited(configured) in-degree/out-degree
-15.	persistent peer information, to support quick recovery
+15.	persistent peer information, to support quick recovery/bootstrap
 16.	support peer liveness detection (ping)
 17.	10000+ node network, with 10+ seeds
 18.	network failure resistance 
   1. <10% node failures, bring <5% performance penalty
   2. provable resistant on >50% node failures
-19.	reactor-based design
+19.	reactor-based(event-driven) design
 20.	push based (combined eager-push and lazy-push)
 21.	support network simulation
 22.	support NAT (optional)
