@@ -54,7 +54,7 @@ MConnection 实现了BaseService接口
 recvRoutine reads PacketMsgs and reconstructs the message using the channels 'recving' buffer.
 After a whole message has been assembled, it is pushed to OnReceive()
 
-Blocks depending on hwo the connection is throttled. Otherwise, it never blocks.
+Blocks depending on how the connection is throttled. Otherwise, it never blocks.
 
 ```
 func (c *MConnection) recvRoutine() {
