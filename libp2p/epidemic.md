@@ -62,6 +62,32 @@ When a new member is detected, it is simply added to the set of EagerPushPeers, 
 
 
 
+## Messages
+
+#### GOSSIP
+        
+        * eager push message
+
+#### IHAVE
+
+        * Lazy push message
+
+#### PRUNE
+
+        * to remove one active link
+
+#### GRAFT
+
+        * triggers the transmission of the missing message payload
+        * adds the corresponding link to the broadcast tree, healing it
+
+#### NEIGHBOR-UP
+
+        * peer sampling service notify DHT that new neighbor discovered.
+
+#### NEIGHBOR-DOWN
+
+        * peer sampling service notify DHT that neighbor disconnected.
 
 
 
