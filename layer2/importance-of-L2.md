@@ -12,7 +12,7 @@ Sharding
 * cross-shard transactions, can dominate the overall system
 
 
-If differnt asset in differnt sharding, a significate number of cross-shard transactions can be expected.
+If differnt asset is in differnt sharding, a significate number of cross-shard transactions can be expected.
 
 
 ### Layer2
@@ -26,6 +26,6 @@ In current cryptocurrencies, the more transactions, the higher the cost per tran
 * More than as payment channels, Layer2 is also off-chain computation and hiding complex scripts inside signatures, or using zero-knownledge contingent payments.
 * Interoperability between different blockchains
 
-
+**Besides anchor service, base chain can also provide time server to Layer2.**
 
 
