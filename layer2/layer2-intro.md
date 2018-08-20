@@ -39,4 +39,10 @@ True innovation, by definition, is disruptive.
 Bitcoin’s peak is around 425K transactions per day and Ethereum’s is 1.4 million. But Twitter has 150 million daily active users, and Facebook has 1.4 billion. 
 ```
 
+## Notes
+
+状态迁移证明：解决已知结果的计算的验证
+
+MPC：解决未知结果的计算的验证
+
 
