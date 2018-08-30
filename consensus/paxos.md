@@ -9,6 +9,8 @@ B : the set of proposal numbers, also called ballot numbers, which is any set th
 
 S : a set of slots used to index the sequence of decisions.
 
+Q : a subset of the acceptors, is used as a quorum system
+
 V : the set of possible proposed values
 
 phi : a predicate that given a value v evaluates to true iff v was chosen by the algorithm
@@ -46,7 +48,53 @@ proBallot - per proposer, the ballot number of the current ballot being run by t
 
 #### Basic Paxos
 
-Phase1a
+definition Phase1a :: "b \<in> B"
+                where
+                "phase1a b = 
+                        <if>   \<not> (<exists> m. m \<in> msgs \<and> m.type \<eq> '1a' \<and> m.bal \<eq> b)
+                        <then> send(['type': '1a', 'bal': b])
+                               \<and> unchanged  (maxVBal, maxBal, maxVal)
+
+
+definition Phase1b :: "a \<in> A"
+                      where
+                      "phase1b a = 
+                        \<if> \<exists> m \<in> msgs 
+                              \<and> m.type \<eq> "1a"
+                              \<and> m.bal \<gr> maxVal[a]
+                        \<then> send(['type': '1b', 'bal': m.bal, 'maxVBal': maxVBal[a], 'maxVal': maxVal[a], 'acc': a])
+                                \<and> maxBal' = maxBal \<if> a \<ne> m.bal
+                                \<and> unchanged (maxVBal, maxVal)
+
+
+
+definition Phase2a :: "b \<in> B"
+                      where
+                      "phase2a a = 
+                      \<if> \<not> \<exists> m. (m \<in> msgs \<and> m.type \<eq> '2a' \<and> m.bal \<eq> b)
+                            \<and> \<exists> v. v \<in> V 
+                            \<and> \<exists> q \<in> Q
+                            \<and> \<exists> S \<subset> { \<forall> m. m.type \<eq> '1b' \<and> m.bal \<eq> b }
+                            \<and> \<forall> a. a \<in> Q \<and> \<exists> m \<in> S \<and> m.acc \<eq> a
+                            \<and> (\<forall> m. m \<in> S \<and> m.maxVBal <eq> -1
+                                    \<or> \<exists> c. c \<in> {0 ... (b-1)}
+                                          \<and> (\<forall> m. m \<in> S \<and> (m.maxVBal \<le> c \<or> (m.maxVal \<eq> c \<and> m.maxVal <eq> v))))
+                      \<then> send(['type': '2a', 'bal': b, 'val': v])
+                              \<and> unchanged(maxBal, maxVBal, maxVal)
+
+
+
+definition Phase2b :: "a \<in> A"
+                      where
+                      \<if> \<exists> m. m \<in> msgs:
+                            \<and> m.type \<eq> '2a'
+                            \<and> m.bal \<ge> maxBal[a]
+                      \<then> send(['type': '2b', 'bal': m.bal, 'val': m.val, 'acc': a])
+                              \<and> maxBal' = maxBal \<if> a \<ne> m.bal
+                              \<and> maxVBal' = maxBal \<if> a \<ne> m.bal
+                              \<and> maxVal = maxVal \<if> a \<ne> m.val
+
+
 
 
 
