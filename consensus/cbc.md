@@ -13,7 +13,7 @@ weight = "validator -> int"
 definition tie_breaking  :: "validator set -> weight -> bool"
                              where
                                 "tie_breaking V w = 
-                                ( forall S0 S1,
+                                (\<forall> S0 S1,
                                         S0 \<subseteq> V -->
                                         S1 \<subseteq> V -->
                                         S0 != S1 -->
