@@ -26,5 +26,12 @@ Celer 采用状态守护网络来解决这些问题。状态守护网络是一�
 整个 Celer Network 的经济制度就是用这种第一原理性设计出来的。我们思考这套经济制度时，核心的出发点是要让 token 能够去 承载整个网络的价值。也就是说，当这个网络有更多人使用，在守护者网络或者状态通道运营这些场景里支付、获得更多服务，每个人的现金流就越高，它的锚定价值也就越高。让 token 的价值和整个网络的使用成正比，这是我们设计经济模型的核心要义。
 
 
+===========================
+
+
+Celer is a Layer-2 Network, is based on eth or other base chain.
+
+Why is CelerToken needed?  It seems not necessary.
+
 
 
