@@ -33,5 +33,8 @@ Celer is a Layer-2 Network, is based on eth or other base chain.
 
 Why is CelerToken needed?  It seems not necessary.
 
+Is guardian necessary in Layer-2 network?  It seems an application design pattern, rather than a mechanism.
+
+Applications on Celer?  still for micro-pay channel?
 
 
