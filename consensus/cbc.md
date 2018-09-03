@@ -22,7 +22,6 @@ definition tie_breaking  :: "validator set -> weight -> bool"
 
 
 
-
 fun sender    :: 'bet -> validator' where "sender (Bet (_, v, _)) = v"
 
 fun est       :: 'bet -> estimate' where "est (Bet (e, _, _v)) = e"
@@ -139,9 +138,6 @@ fun is_valid :: "weight -> bet -> bool"
 definition is_valid_view :: "weight -> bet set -> bool"
                             where
                             "is_valid_view w bs = (is_view bs \<and> (\<forall> b \<in> bs. is_valid w b))"
-
-
-
 
 
 

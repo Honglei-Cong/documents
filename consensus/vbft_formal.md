@@ -66,6 +66,26 @@ definition proposer_priority :: "int -> int -> int"        // (vrf, proposer_id)
 
 ### Specification
 
+datatype 
+
+fun blockhash :: "block -> hash"
+                 where
+                 "
+
+fun prevhash :: "block -> hash"
+                where
+                "
+
+fun prevblock :: "block -> block"
+                  where
+                  "
+
+
+fun block_proposer :: "block -> int"
+                      where
+
+
+fun block_validators :: "block -> set
 
 
 
@@ -75,21 +95,11 @@ definition proposer_priority :: "int -> int -> int"        // (vrf, proposer_id)
 
 
 
-===
-pos table
-vrf
-
-isProposer
-isEndorser
-isCommitter
 
 
-isEquivocation
 
 
-manyVoters
 
-see(x, y)
 
 
 
