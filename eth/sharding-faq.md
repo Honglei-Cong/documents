@@ -3,10 +3,10 @@ https://github.com/ethereum/wiki/wiki/Sharding-FAQs
 
 
 
-Introduction
+## Introduction
 Currently, in all blockchain protocols each node stores all states (account balances, contract code and storage, etc.) and processes all transactions. This provides a large amount of security, but greatly limits scalability: a blockchain cannot process more transactions than a single node can. In large part because of this, Bitcoin is limited to ~3-7 transactions per second, Ethereum to 7-15, etc. However, this poses a question: are there ways to create a new mechanism, where only a small subset of nodes verifies each transaction? As long as there are sufficiently many nodes verifying each transaction that the system is still highly secure, but a sufficiently small percentage of the total validator set that the system can process many transactions in parallel, could we not use such a technique to greatly increase a blockchain's throughput?
 
-Contents
+## Contents
 
 * What are some trivial but flawed ways of solving the problem?
 * This sounds like there’s some kind of scalability trilemma at play. What is this trilemma and can we break through it?
@@ -66,9 +66,10 @@ If only a few miners/mining pools participate in merge-mining each chain, then t
 
 The trilemma claims that blockchain systems can only at most have two of the following three properties:
 
-Decentralization (defined as the system being able to run in a scenario where each participant only has access to O(c) resources, i.e. a regular laptop or small VPS)
-Scalability (defined as being able to process O(n) > O(c) transactions)
-Security (defined as being secure against attackers with up to O(n) resources)
+* Decentralization (defined as the system being able to run in a scenario where each participant only has access to O(c) resources, i.e. a regular laptop or small VPS)
+* Scalability (defined as being able to process O(n) > O(c) transactions)
+* Security (defined as being secure against attackers with up to O(n) resources)
+
 In the rest of this document, we’ll continue using c to refer to the size of computational resources (including computation, bandwidth and storage) available to each node, and n to refer to the size of the ecosystem in some abstract sense; we assume that transaction load, state size, and the market cap of a cryptocurrency are all proportional to n.
 
 ## Some people claim that because of Metcalfe’s law, the market cap of a cryptocurrency should be proportional to n^2, and not n. Do they have a point?
