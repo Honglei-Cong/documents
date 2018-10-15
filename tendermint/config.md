@@ -6,6 +6,22 @@
 
 
 ```
+// Config defines the top level configuration for a Tendermint node
+type Config struct {
+	// Top level options use an anonymous struct
+	BaseConfig `mapstructure:",squash"`
+
+	// Options for services
+	RPC             *RPCConfig             `mapstructure:"rpc"`
+	P2P             *P2PConfig             `mapstructure:"p2p"`
+	Mempool         *MempoolConfig         `mapstructure:"mempool"`
+	Consensus       *ConsensusConfig       `mapstructure:"consensus"`
+	TxIndex         *TxIndexConfig         `mapstructure:"tx_index"`
+	Instrumentation *InstrumentationConfig `mapstructure:"instrumentation"`
+}
+
+
+
 type ConsensusConfig struct {
     RootDir                 string
     WalPath                 string
