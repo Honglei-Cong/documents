@@ -66,3 +66,29 @@ A history h is in NMSI iff h belongs to (ACA & CONS & WCF)
 
 
 ## Protocol
+
+### state of Transaction:
+
+* Executing
+  * Each non-termination operation o_i(x) in T_i is executed optimistically at the transaction coordinator coord(T_i).
+  * if o_i is read, coord(T_i) returns the value, fetched either from local replica or a remote one.
+  * if o_i is write, coord(T_i) stores the corresponding update valud in a local buffer, enabling
+      * subsequent reads to observe the modification
+      * subsequent commit to send the write-set to remote replicas
+* Submitted
+  * Once all read/write operations of T_i have executed, T_i terminates, and the coordinator submits it to the termination protocol.
+  * The protocol applies a certification test on T_i to enforce NMSI.
+  * This test ensures that if two concurrent conflicting update transactions terminate, one of them aborts.
+* Committed/Aborted
+  * If Committed, its updates are applied to the local data store.
+  * If Aborted, T_i is aborted.
+
+
+### Termination Protocol
+
+In order to satisfy GPR, the termination protocols uses a genuine atomic multicast primitives.  This requires:
+
+* we form non-intersecting groups of replicas, and an eventually leader oracle is available in each group
+* a system-wide reliable failure detector is available.
+
+
