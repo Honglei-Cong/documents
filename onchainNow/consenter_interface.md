@@ -6,6 +6,7 @@
 * Consenter 
     * HandleChain(support ConsenterSupport, metadata *cb.Metadata) (Chain, error)
     	* // create and return a reference to a chain for the given set of resources.
+
 * Chain
     * Order (env *cb.Envelope, configSeq uint64) error
     	* // Accept a message which has been processed at a given configSeq.
@@ -20,6 +21,7 @@
     	* // Start() should allocate whatever resources are needed for staying up to date with the chain.
     * Halt()
     	* // frees the resources which were allocated for this Chain.
+
 * ConsenterSupport
     * crypto.LocalSigner
         * SignatureHeaderMaker
