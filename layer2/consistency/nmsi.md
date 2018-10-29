@@ -64,6 +64,14 @@ A history h is write-conflict free, iff independent committed transactions never
 A history h is in NMSI iff h belongs to (ACA & CONS & WCF)
 
 
+* 如果 T_i 读取了 T_j 写入的数据，T_i 依赖于 T_j
+* 依赖关系具有传递性
+* 所有事务都从一致性快照中读取数据，比如 T_i 读取到了 x_j，而 T_k 写入了 x_k，T_i 依赖于 T_k，那么 x_k 的写入肯定发生在 x_j之前。
+* 所有事务读取的都是commit后的数据。 数据只有commit后才能被其它事务读取。
+* 相互独立的事务，不会对写入到同一数据。即，如果两个事务写入到了同一数据，他们之间必定存在依赖关系。
+
+通过rwlock实现ACA，可以提高跨链效率。
+
 
 ## Protocol
 
