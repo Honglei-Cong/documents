@@ -23,8 +23,8 @@
 
 * hash(self)
 * merkel_hash(self)
-* is_single_utxo(self)
-* is_deposit_transaction(self)  : UTXO的输入为空
+* is\_single\_utxo(self)
+* is\_deposit\_transaction(self)  : UTXO的输入为空
 * sender1(self)
 * sender2(self)
 * encoded(self)
@@ -48,10 +48,10 @@ from rlp.Serializable
 * signer (self)
 * merkle (self)
 * root (self)
-* is_deposit_block (self)
+* is\_deposit\_block (self)
 * encoded (self)
 * sign (self, key)
-* add_transaction (self, tx)
+* add\_transaction (self, tx)
 
 ## Chain
 
@@ -60,17 +60,17 @@ from rlp.Serializable
 * operator
 * blocks = {}
 * parent_queue = {}
-* child_block_internval = 1000
-* next_child_block
-* next_deposit_block = 1
+* child\_block\_internval = 1000
+* next\_child\_block
+* next\_deposit\_block = 1
 
 #### Funcs
 
 * add_block(self, block)
-* validate_transaction (self, tx, temp_spent={})
-* get_block(self, blknum)
-* get_transaction (self, utxo_id)
-* mark_utxo_spent(self, utxo_id)
+* validate\_transaction (self, tx, temp_spent={})
+* get\_block(self, blknum)
+* get\_transaction (self, utxo_id)
+* mark\_utxo\_spent(self, utxo_id)
 * \_apply\_transaction (self, tx)
 * \_validate\_block (self, block)
 * \_apply\_block (self, block)
@@ -177,4 +177,10 @@ struct Plasmablock { root, timestamp }
 * chain = Chain(operator)
 * current\_block
 
+**Event Processing**
+
+* Deposit
+    * 在child chain上构建一个Block，添加到chain上
+* ExitStarted
+    * 将对应的utxo标记为spent
 
