@@ -23,6 +23,24 @@ Identified the following essential scalability properties:
 * a transaction may read object versions committed after it started
 * two transactions synchronise with each other only if their writes conflict
 
+### Scalability Properties
+
+* Wait-Free Queries
+    * Read-only transactions does not wait for concurrent transactions and always commits.  
+    * (For blockchain, read-only transactions are executed off-chain.)
+* Genuine Partial Replication
+    * Many partial replication protocols perform system wide global consensus or communication.
+    * Genuine Partial Replication, transactions communicates only with replicas that store some object accessed in the transaction.
+    * Non-conflicting transactions do not interfere with each other, and the intrinsic parallelism of a workload can be exploited.
+    * (good, only related smart-contracts are locked in current design.)
+* Minimal Commitment Synchronization
+    * To keep consensus, while alleviating their costs
+    * during commitment, transaction T_i waits for transaction T_j only if T_i and T_j write-conflict. 
+    * (What is write-conflict? seems read-write conflict need to be handled in current design)
+* Forward Freshness
+    * A criterion support Forward Freshness if it allows reading an object version that committed after the start of the transaction.
+    * In case of global transactions (i.e., transactions that touch several sites), this property is fundermental.
+
 
 ## Definition of NMSI
 
