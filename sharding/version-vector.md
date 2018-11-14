@@ -2,7 +2,7 @@
 
 # Version Vector
 
-The version vector allows the participant to determine if oneupdate preceded another (happended-before), followed it, or if the two updates happened concurrently (and therefore might conflict with each other).
+The version vector allows the participant to determine if one update preceded another (happended-before), followed it, or if the two updates happened concurrently (and therefore might conflict with each other).
 
 The version vector generates a preorder that tracks the events that precede, and may therefore influence, later updates.
 
