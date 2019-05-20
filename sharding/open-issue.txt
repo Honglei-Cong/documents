@@ -54,3 +54,10 @@ should CheckCallShard (native.ShardID.ParentShardID) ?
 # Shard Staking Contract
 
 
+
+# Sharding Asset Contract
+
+Is it necessary to provide interfaces like Name/Symbol/Decimals/TotalSupply?
+
+support OEP4 additional issue.
+
