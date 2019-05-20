@@ -1,0 +1,4 @@
+
+1. CreateShard : 100 ONG, change to configurable?
+
+
