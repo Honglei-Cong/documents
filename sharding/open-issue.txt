@@ -1,4 +1,56 @@
 
-1. CreateShard : 100 ONG, change to configurable?
+
+# Shard Mgmt Contract
+
+### ShardMgmtInit
+
+add another param for shard-creation fee contract-address.
+
+ONG-address as default.
+
+### CreateShard
+
+1st phase, shard can only be created from root-shard?
+
+
+100 ONG, change to configurable?
+
+
+### ConfigShard
+
+shard can be configured, only when shard-state == CREATED || CONFIGURED.
+
+shard configure updating not supported after peer joined or shard activated?
+
+
+### ApplyJoinShard
+
+state_default, rename to state_init?
+
+apply join shard, fee 100 ONG?
+
+### ActivateShard
+
+need to verify shard-network size
+
+
+### UpdateConfig
+
+TODO
+
+### CommitDpos
+
+check shard state firstly.
+
+
+
+### ShardCommitDpos
+
+should CheckCallShard (native.ShardID.ParentShardID) ?
+
+
+
+
+# Shard Staking Contract
 
 
