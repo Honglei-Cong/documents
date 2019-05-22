@@ -61,3 +61,25 @@ Is it necessary to provide interfaces like Name/Symbol/Decimals/TotalSupply?
 
 support OEP4 additional issue.
 
+
+
+
+# Shard Msg Processing
+
+store cross-shard msgs in another DB.
+
+
+# Cross-Shard Message Relay
+
+* Transaction including authorization to shard-peers
+* Cross-Shard Msg carries Tx and Auth-Info
+* SysMsg-Queue contracts verifies Auth-Info
+
+# User Contract
+
+1. deployed on main-chain.
+2. executed on shard-chain.   Load smart contract code and metadata from main-chain ledger
+3. validate metadata before execution
+
+
+
