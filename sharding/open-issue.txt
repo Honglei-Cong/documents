@@ -62,7 +62,9 @@ Is it necessary to provide interfaces like Name/Symbol/Decimals/TotalSupply?
 support OEP4 additional issue.
 
 
+# XShard locking
 
+For OEP asset contract, locking with account, rather than locking with contract.
 
 # Shard Msg Processing
 
@@ -80,6 +82,12 @@ store cross-shard msgs in another DB.
 1. deployed on main-chain.
 2. executed on shard-chain.   Load smart contract code and metadata from main-chain ledger
 3. validate metadata before execution
+
+# Shard Ledger
+
+Should shard ledger be overlayDB from root ledger?
+
+* contract-level overlay?
 
 
 
