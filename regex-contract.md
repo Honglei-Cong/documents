@@ -58,6 +58,6 @@ def match(regex, target):
 优胜者的条件为:
 
 1. 通过所有测试用例
-2. 完成所有测试的所需要的NeoVM指令数总和最少
+2. 完成所有测试的所需要的Ontology-NVM指令数总和最少
 
 
