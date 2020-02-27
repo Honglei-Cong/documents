@@ -70,7 +70,7 @@ When a new member is detected, it is simply added to the set of EagerPushPeers, 
 
 #### IHAVE
 
-        * Lazy push message
+        * Lazy pull message
 
 #### PRUNE
 
