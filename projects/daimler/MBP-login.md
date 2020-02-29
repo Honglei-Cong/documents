@@ -97,6 +97,7 @@ autonumber
 entity User
 entity MOP
 entity UserMobilityApp
+entity UserMobilityBackend
 entity Doorman
 
 User->MOP: Open
@@ -114,18 +115,18 @@ deactivate Doorman
 MOP->User: Request confirmation of scope
 User->MOP: Confirm
 activate MOP
-MOP->Doorman: Request AccessToken
-activate Doorman
-Doorman-->MOP: Return AccessToken
+MOP->UserMobilityBackend: Request AccessToken
+activate UserMobilityBackend
+UserMobilityBackend-->MOP: Return AccessToken
 note right: AccessToken is in JWT
-deactivate Doorman
+deactivate UserMobilityBackend
 MOP->MOP: Save user access token
-MOP->Doorman: Request user info
+MOP->UserMobilityBackend: Request user info
 note left: Request user nickname,\n head photo, profile, etc
-activate Doorman
-Doorman->Doorman: Validate scope \nof request
-Doorman-->MOP: Return user info
-deactivate Doorman
+activate UserMobilityBackend
+UserMobilityBackend->UserMobilityBackend: Validate scope of request
+UserMobilityBackend-->MOP: Return user info
+deactivate UserMobilityBackend
 MOP-->User: Login OK
 deactivate MOP
 ```
