@@ -74,7 +74,7 @@ pipelined design
 ```
 Vote = [ RoundVote ]
 
-RoundVote = < NodeID, Height, View, ViewJustify, Proposal, Prepare, Commit, Result >
+RoundVote = < NodeID, Height, View, ViewJustify, Proposal, Prepare, Commit, Result, Sig >
 
 ViewJustfiy = [ 2F+1 当前View的viewchange签名 ]
 
@@ -91,7 +91,7 @@ CommitJustify = [ 2F+1 prepare签名 ]
 
 Result = < Height, ProposerID, BlkHash, ResultHash, resultHashSig, msgID >
 
-ViewChange = [ NodeID, Height, NewView, Commit, viewSig ]
+ViewChange = [ NodeID, Height, NewView, Commit, Sig ]
 
 ```
 
