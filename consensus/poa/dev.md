@@ -54,11 +54,11 @@
 ### Vote Msg Processing
 
 1. verify message 
-   1. verify signatures in msg
+   1. verify signatures in msg (in msg verification)
    2. verify rounds in vote is in a chain
    3. verify no new-view-justify from peer outside the chain
    4. verify no other commit-msg from peer outside the chain
-   5. verify proposal msg is available at tail
+   5. verify proposal msg can only be at tail
 2. for each round in msg:
    1. process new-view-justify
       1. if commit-locked on other fork:
@@ -102,10 +102,16 @@
 
 ### timer event
 
+timer for each round, update timer on receiving any message in the round
+
 * New-View timeout
 
 
 ### action
+
+* seal-block (proposal)
+* postseal-block (proposal)
+* make-proposal (height, view)
 
 ### Chain Config
 

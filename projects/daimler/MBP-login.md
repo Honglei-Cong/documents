@@ -13,6 +13,9 @@ MBP as one blockchain-based unified account system.
 * User Login with Wechat
 * MOP User Login through MBP
 
+TODO: documentation for 3rd case
+
+
 ### User Registration with KYC
 
 ```plantuml
@@ -29,13 +32,13 @@ group KYC
     activate KYCProvider
     KYCProvider->KYCProvider: Verify driver license
     KYCProvider-->UserMobilityApp: Verify OK
-    KYCProvider->Doorman: Register (pubkey, claim)
+    KYCProvider-[#0000FF]>Doorman: Register (pubkey, claim)
     deactivate KYCProvider
 end
 activate Doorman
 Doorman->Doorman: Process register request
-Doorman->MBP: Register DID(pubkey)
-MBP-->Doorman: Transaction notification (DID)
+Doorman-[#0000FF]>MBP: Register DID(pubkey)
+MBP-[#0000FF]->Doorman: Transaction notification (DID)
 Doorman-->UserMobilityApp: DID received
 deactivate Doorman
 UserMobilityApp->Doorman: Request claim
@@ -72,8 +75,8 @@ WechatBackend-->Doorman: Return AccessToken
 deactivate WechatBackend
 note left: AccessToken from Wechat,\n also in JWT format
 Doorman->Doorman: Create wallet
-Doorman->MBP: DID-register(pubkey)
-MBP-->Doorman: Transaction notification
+Doorman-[#0000FF]>MBP: DID-register(pubkey)
+MBP-[#0000FF]->Doorman: Transaction notification
 Doorman->Doorman: Update UserMapping
 Doorman->WechatBackend: Request Wechat user profile \n(with AccessToken)
 note left: user profile includes \nnickname, head photo ...
@@ -105,10 +108,10 @@ MOP->User: Login through MBP-Signin supported
 User->MOP: Click `MBP SignIn`
 group Assume User KYCed in MBP
     MOP->UserMobilityApp: SignIn
-    UserMobilityApp->Doorman: Request logincode
+    UserMobilityApp-[#0000FF]>Doorman: Request logincode
     activate Doorman
-    Doorman->MBP: Verify login claim
-    MBP-->Doorman: Login OK
+    Doorman-[#0000FF]>MBP: Verify login claim
+    MBP-[#0000FF]->Doorman: Login OK
     Doorman-->MOP: Callback with logincode and claim scope
 end
 deactivate Doorman
