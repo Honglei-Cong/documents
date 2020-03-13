@@ -25,12 +25,12 @@
    2. 火币更新节点的IP列表
    3. OK更新节点的IP列表
 10. 停止我们的Phecda节点
-11. 依次重启 我们/火币/ OK 的节点 
+11. 依次重启 我们/火币/ OK 的节点
     1.  火币OK的节点在我们重启完成后，通知他们依次重启
-12. 完成后，通知Bison Trails，其他的节点firewall已经配置好，
+12. 完成后，通知Bison Trails，其他的节点firewall已经配置好
 13. bison trails 更新 peers.recent文件，并重启节点
 14. 监控Bison trails节点高度
 15. bison trails同步完成后，通过浏览器确认参与出块
-16. 所有节点确认和bison trails节点网络链接正常 
+16. 所有节点确认和bison trails节点网络链接正常
     1.  (netstat -antp | grep ontology) 查看ontology进程的网络链接
 
