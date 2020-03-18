@@ -87,6 +87,14 @@
    3. process commit
    4. process prepare
    5. process proposal
+      1. find blocknode
+      2. if locked on other forks, return
+      3. if prepared, return
+      4. if proprepared
+         1. make prepare
+      5. else if is proactor
+         1. if prev-blocknode is proprepared
+            1. make prepare
 3. response
    1. build response msg
    2. broadcast
