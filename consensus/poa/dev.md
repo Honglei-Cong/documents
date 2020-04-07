@@ -108,6 +108,25 @@
 
 
 
+### Action processing
+
+
+**Make Proposal**
+1. 
+
+
+**Make Prepare**
+
+- input: (height, view)
+- output: add prepare-msg to pending response
+
+**Make Commitment**
+
+
+**Make ViewChange**
+
+
+
 ### timer event
 
 timer for each round, update timer on receiving any message in the round
