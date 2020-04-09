@@ -54,6 +54,18 @@ Marketing:
 
 * Internet of Things (IoT) devices and robots, when combined with a cryptocurrency, can seam- lessly earn, barter or exchange resources with other devices on the same network
 
+### Conclusion
+
+Key costs that are effected by blockchain technology:
+* cost of verification
+* cost of networking
+
+For market, participant need to be able to efficiently verify and audit transaction attributes.
+
+Distributed ledger technology can be used to bootstrap networks of exchange that do not rely on traditional intermediaries.
+Intermediaries can still add value to transactions by focusing on the market design layer.
+
+This challenges existing revenue models and incumbents' market power, and opens opportunities for novel approaches to regulation and the provision of public goods, software, identity, exchange platforms and reputation systems.
 
 
 # "Market Design for a Blockchain-Based Financial System"
